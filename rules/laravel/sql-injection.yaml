@@ -1,0 +1,43 @@
+rules:
+  - id: laravel-raw-sql-interpolation
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Request data reaches a raw SQL fragment. Eloquent and the query builder
+      parameterise automatically, so injection only appears where a developer
+      opts out. Pass the value as a binding instead, for example
+      whereRaw('name LIKE ?', ["%{$request->q}%"]).
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      framework: laravel
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+      references:
+        - https://laravel.com/docs/queries#raw-expressions
+    patterns:
+      # Single argument only. The parameterised forms take a bindings array as
+      # a second argument, so matching arity excludes them without needing a
+      # separate exclusion rule.
+      - pattern-either:
+          - pattern: $M->whereRaw($SQL)
+          - pattern: $M->orWhereRaw($SQL)
+          - pattern: $M->havingRaw($SQL)
+          - pattern: $M->orHavingRaw($SQL)
+          - pattern: $M->selectRaw($SQL)
+          - pattern: $M->orderByRaw($SQL)
+          - pattern: $M->groupByRaw($SQL)
+          - pattern: DB::raw($SQL)
+          - pattern: DB::select($SQL)
+          - pattern: DB::statement($SQL)
+          - pattern: DB::unprepared($SQL)
+          - pattern: DB::insert($SQL)
+          - pattern: DB::update($SQL)
+          - pattern: DB::delete($SQL)
+      # And only when the fragment carries request-derived data. A raw
+      # aggregate like selectRaw('COUNT(*) as total') is not injection, and
+      # flagging it is how a rule earns a reputation for noise.
+      - metavariable-regex:
+          metavariable: $SQL
+          regex: (?s).*\$(request|_GET|_POST|_REQUEST|_COOKIE|_SERVER|input\b).*

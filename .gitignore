@@ -1,0 +1,8 @@
+node_modules/
+.semgrep/
+.semgrep_logs/
+*.sarif
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
