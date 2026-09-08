@@ -33,6 +33,13 @@ class PaymentGateway
     }
 }
 
+/*
+ * The credential fixtures below use EXAMPLE runs rather than random looking
+ * strings. They still match the rule, which cares about the shape, but secret
+ * scanners recognise them as placeholders. A realistic looking fake in a
+ * security repository gets the push blocked and, worse, trains people to click
+ * past a genuine push protection warning.
+ */
 class Credentials
 {
     public function hardcoded()
@@ -41,7 +48,7 @@ class Credentials
         $stripe = 'sk_live_REDACTED';
 
         // ruleid: laravel-hardcoded-credential
-        $github = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+        $github = 'ghp_EXAMPLEEXAMPLEEXAMPLEEXAMPLE00000000';
 
         return [$stripe, $github];
     }
