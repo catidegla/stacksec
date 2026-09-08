@@ -1,0 +1,157 @@
+name: stacksec
+description: >-
+  Framework-aware security rules for Laravel and Next.js. Runs semgrep with a
+  ruleset that knows the difference between mimes: and mimetypes:, and emits
+  SARIF for code scanning.
+author: Christ-loisele Atidegla
+
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  paths:
+    description: What to scan. Defaults to the whole checkout.
+    required: false
+    default: .
+
+  stack:
+    description: >-
+      Which rules to run: laravel, nextjs, or all. Running only what applies
+      keeps the scan fast and keeps irrelevant rules out of the report.
+    required: false
+    default: all
+
+  severity:
+    description: >-
+      Minimum severity to report: ERROR, WARNING or INFO. INFO includes the
+      low confidence rules, which are worth reading and not worth blocking on.
+    required: false
+    default: WARNING
+
+  fail-on:
+    description: >-
+      Severity at which the step fails. Set to none to report without blocking,
+      which is the right setting for the first week on an existing codebase.
+    required: false
+    default: ERROR
+
+  sarif-file:
+    description: Where to write the SARIF report. Leave empty to skip it.
+    required: false
+    default: stacksec.sarif
+
+  baseline-ref:
+    description: >-
+      Only report findings introduced since this git ref. On a large existing
+      codebase this is the difference between a usable report and thousands of
+      pre-existing findings nobody will read.
+    required: false
+    default: ''
+
+  semgrep-version:
+    description: Pinned so a scan does not change behaviour without a commit.
+    required: false
+    default: '1.176.1'
+
+outputs:
+  findings:
+    description: Number of findings reported.
+    value: ${{ steps.scan.outputs.findings }}
+  sarif-file:
+    description: Path to the SARIF report, if one was written.
+    value: ${{ steps.scan.outputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install semgrep
+      shell: bash
+      run: pip install --quiet "semgrep==${{ inputs.semgrep-version }}"
+
+    - name: Select rules
+      id: rules
+      shell: bash
+      run: |
+        case "${{ inputs.stack }}" in
+          laravel) config="${{ github.action_path }}/rules/laravel" ;;
+          nextjs)  config="${{ github.action_path }}/rules/nextjs" ;;
+          all)     config="${{ github.action_path }}/rules" ;;
+          *)
+            echo "::error::Unknown stack '${{ inputs.stack }}'. Use laravel, nextjs or all."
+            exit 1
+            ;;
+        esac
+        echo "config=$config" >> "$GITHUB_OUTPUT"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      run: |
+        set -o pipefail
+
+        args=(
+          --config "${{ steps.rules.outputs.config }}"
+          --severity "${{ inputs.severity }}"
+          --metrics off
+          --disable-version-check
+          --error
+        )
+
+        if [ -n "${{ inputs.sarif-file }}" ]; then
+          args+=(--sarif --output "${{ inputs.sarif-file }}")
+        fi
+
+        # Fixtures are deliberately vulnerable code. Scanning them would report
+        # dozens of findings in the action's own directory.
+        args+=(--exclude 'rules/**')
+
+        if [ -n "${{ inputs.baseline-ref }}" ]; then
+          git fetch --depth=1 origin "${{ inputs.baseline-ref }}" 2>/dev/null || true
+          args+=(--baseline-commit "${{ inputs.baseline-ref }}")
+        fi
+
+        # --error makes semgrep exit non-zero on findings. Capture that rather
+        # than letting it end the step, so the report is still written and
+        # fail-on decides what happens next.
+        set +e
+        semgrep "${args[@]}" "${{ inputs.paths }}"
+        status=$?
+        set -e
+
+        count=0
+        if [ -f "${{ inputs.sarif-file }}" ]; then
+          count=$(python -c "import json;print(len(json.load(open('${{ inputs.sarif-file }}'))['runs'][0]['results']))")
+          echo "sarif-file=${{ inputs.sarif-file }}" >> "$GITHUB_OUTPUT"
+        fi
+        echo "findings=$count" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "### stacksec"
+          echo ""
+          if [ "$count" -eq 0 ]; then
+            echo "No findings at ${{ inputs.severity }} or above."
+          else
+            echo "**$count finding(s)** at ${{ inputs.severity }} or above."
+            echo ""
+            echo "Findings appear inline on the diff once the SARIF is uploaded."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "${{ inputs.fail-on }}" = "none" ]; then
+          exit 0
+        fi
+
+        # semgrep exits 1 on findings and 2 or higher on an actual error. An
+        # error should always fail the step, whatever fail-on says.
+        if [ "$status" -gt 1 ]; then
+          echo "::error::semgrep exited $status"
+          exit "$status"
+        fi
+
+        exit "$status"

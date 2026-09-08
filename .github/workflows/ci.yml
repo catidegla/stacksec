@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    name: Rule fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: pip install --quiet semgrep==1.176.1
+
+      # Fails on a miss, on a false positive, and on an unannotated match.
+      - name: Every rule behaves as specified
+        run: node scripts/test-rules.mjs
+
+      - name: Every rule has a fixture with ok cases
+        run: |
+          missing=0
+          for rule in rules/*/*.yaml; do
+            stem="${rule%.yaml}"
+            fixture=""
+            for ext in php ts tsx js jsx; do
+              [ -f "$stem.$ext" ] && fixture="$stem.$ext" && break
+            done
+
+            if [ -z "$fixture" ]; then
+              echo "::error file=$rule::no fixture"
+              missing=1
+              continue
+            fi
+
+            if ! grep -q "ok:" "$fixture"; then
+              echo "::error file=$fixture::no ok: cases, so it only proves the rule fires"
+              missing=1
+            fi
+          done
+          exit $missing
+
+  action:
+    name: Action smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The action has to catch a real defect in a project that is not this
+      # repository, or it is only proven against its own fixtures.
+      - name: Build a small vulnerable project
+        run: |
+          mkdir -p /tmp/project/app/Http/Controllers
+          cat > /tmp/project/app/Http/Controllers/UserController.php <<'PHP'
+          <?php
+          namespace App\Http\Controllers;
+
+          class UserController
+          {
+              public function search($request, $query)
+              {
+                  return $query->whereRaw("name LIKE '%{$request->q}%'")->get();
+              }
+
+              public function update($request, $user)
+              {
+                  $user->update($request->all());
+              }
+          }
+          PHP
+
+      - name: Run the action against it
+        id: scan
+        uses: ./
+        with:
+          paths: /tmp/project
+          stack: laravel
+          fail-on: none
+          sarif-file: /tmp/stacksec.sarif
+
+      - name: It found both defects
+        run: |
+          count="${{ steps.scan.outputs.findings }}"
+          echo "findings: $count"
+
+          if [ "$count" -lt 2 ]; then
+            echo "::error::expected at least 2 findings, got $count"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          sarif = json.load(open("/tmp/stacksec.sarif"))
+          run = sarif["runs"][0]
+          ids = {r["ruleId"].split(".")[-1] for r in run["results"]}
+          print("rules that fired:", sorted(ids))
+          for expected in ("laravel-raw-sql-interpolation", "laravel-mass-assign-unfiltered-request"):
+              assert any(expected in i for i in ids), f"missing {expected}"
+          print("SARIF is well formed and both rules fired")
+          PY
+
+      - name: fail-on none really does not fail
+        run: echo "reached, so the previous step exited 0 despite findings"
+
+  manifests:
+    name: Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: YAML and JSON are valid and agree
+        run: |
+          pip install --quiet pyyaml
+          python - <<'PY'
+          import json, yaml
+
+          yaml.safe_load(open("action.yml"))
+          print("action.yml ok")
+
+          import glob
+          for f in glob.glob("rules/*/*.yaml"):
+              doc = yaml.safe_load(open(f, encoding="utf-8"))
+              assert doc and "rules" in doc, f
+              for rule in doc["rules"]:
+                  for key in ("id", "message", "severity", "languages", "metadata"):
+                      assert key in rule or key == "languages", f"{f}: {rule.get('id')} missing {key}"
+                  assert "cwe" in rule["metadata"], f"{rule['id']} has no CWE"
+              print(f, "ok")
+
+          plugin = json.load(open(".claude-plugin/plugin.json"))
+          market = json.load(open(".claude-plugin/marketplace.json"))
+          entry = next(p for p in market["plugins"] if p["name"] == plugin["name"])
+          assert entry["version"] == plugin["version"], "version mismatch"
+          print("manifests agree on version", plugin["version"])
+          PY

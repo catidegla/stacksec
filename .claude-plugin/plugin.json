@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "stacksec",
+  "version": "0.1.0",
+  "description": "Framework-aware security rules for Laravel and Next.js. Semgrep rules that know the difference between mimes: and mimetypes:, plus a review skill for the defects static analysis cannot see.",
+  "author": {
+    "name": "Christ-loisele Atidegla",
+    "url": "https://github.com/catidegla"
+  },
+  "homepage": "https://github.com/catidegla/stacksec",
+  "repository": "https://github.com/catidegla/stacksec",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "laravel",
+    "nextjs",
+    "semgrep",
+    "sast",
+    "code-review",
+    "devsecops",
+    "php",
+    "typescript"
+  ]
+}

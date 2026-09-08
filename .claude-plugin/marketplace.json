@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "stacksec",
+  "version": "0.1.0",
+  "description": "Framework-aware security rules for Laravel and Next.js.",
+  "owner": {
+    "name": "Christ-loisele Atidegla",
+    "url": "https://github.com/catidegla"
+  },
+  "plugins": [
+    {
+      "name": "stacksec",
+      "description": "Semgrep rules for Laravel and Next.js that carry the cases they must ignore as well as the ones they must catch, plus a review skill covering per-record authorization, guard-clause allowlists and whole-record client props, which no pattern can see.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Christ-loisele Atidegla",
+        "url": "https://github.com/catidegla"
+      },
+      "source": "./",
+      "category": "security",
+      "keywords": [
+        "security",
+        "laravel",
+        "nextjs",
+        "semgrep",
+        "sast",
+        "devsecops"
+      ],
+      "homepage": "https://github.com/catidegla/stacksec",
+      "license": "MIT"
+    }
+  ]
+}
