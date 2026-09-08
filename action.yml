@@ -24,8 +24,9 @@ inputs:
 
   severity:
     description: >-
-      Minimum severity to report: ERROR, WARNING or INFO. INFO includes the
-      low confidence rules, which are worth reading and not worth blocking on.
+      Minimum severity to report: ERROR, WARNING or INFO. This is a genuine
+      minimum, unlike semgrep's own --severity flag, which selects only the
+      one level you name.
     required: false
     default: WARNING
 
@@ -95,11 +96,27 @@ runs:
       run: |
         set -o pipefail
 
+        # semgrep's --severity selects exactly the level named rather than
+        # acting as a floor, so asking for WARNING silently drops every ERROR
+        # rule. Repeating the flag is how you express a real minimum.
+        case "${{ inputs.severity }}" in
+          ERROR)   levels=(--severity ERROR) ;;
+          WARNING) levels=(--severity ERROR --severity WARNING) ;;
+          INFO)    levels=(--severity ERROR --severity WARNING --severity INFO) ;;
+          *)
+            echo "::error::Unknown severity '${{ inputs.severity }}'. Use ERROR, WARNING or INFO."
+            exit 1
+            ;;
+        esac
+
         args=(
           --config "${{ steps.rules.outputs.config }}"
-          --severity "${{ inputs.severity }}"
+          "${levels[@]}"
           --metrics off
           --disable-version-check
+          # Without this, semgrep run from inside a checkout scans only
+          # git-tracked files and silently ignores any path outside the repo.
+          --no-git-ignore
           --error
         )
 
@@ -107,9 +124,9 @@ runs:
           args+=(--sarif --output "${{ inputs.sarif-file }}")
         fi
 
-        # Fixtures are deliberately vulnerable code. Scanning them would report
-        # dozens of findings in the action's own directory.
-        args+=(--exclude 'rules/**')
+        # Fixtures are deliberately vulnerable code. A glob does not match
+        # here, so the directory name is excluded instead.
+        args+=(--exclude rules)
 
         if [ -n "${{ inputs.baseline-ref }}" ]; then
           git fetch --depth=1 origin "${{ inputs.baseline-ref }}" 2>/dev/null || true
