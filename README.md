@@ -19,7 +19,7 @@ Semgrep rules for Laravel and Next.js, where every rule ships with the code it m
 $request->validate(['avatar' => 'required|file|mimetypes:image/jpeg|max:2048']);
 ```
 
-That line validates nothing useful. `mimetypes:` trusts the `Content-Type` header the client chose. `mimes:` inspects the actual file contents. Four characters apart, opposite guarantees, and no general purpose scanner knows the difference because it is not a language feature. It is a Laravel one.
+That line validates nothing useful. `mimetypes:` trusts the `Content-Type` header the client chose. `mimes:` inspects the actual file contents. Four characters apart, opposite guarantees, and the difference lives inside a validation string rather than in a function call, which is where a generic rule has nothing to hook onto.
 
 That is what these rules are for.
 
@@ -126,6 +126,14 @@ Being explicit, because a security tool that implies more coverage than it has i
 - **Business logic.** Whether a refund can exceed the charge. Nothing will ever catch that.
 
 The Claude Code plugin covers these, because they need judgement rather than a pattern.
+
+## Where this sits
+
+Semgrep's own registry is not empty here, and it would be misleading to imply otherwise. It carries Laravel rules, including `php.laravel.security.laravel-raw-sql-injection` and mass assignment checks, and Semgrep Pro advertises further Laravel coverage. Run `p/php` first. It is free, it is maintained by Semgrep, and it overlaps with part of this ruleset.
+
+What these add is the class of bug that lives inside Laravel's string DSLs rather than in a call signature, plus a false positive corpus every rule has to survive. [REJECTED.md](REJECTED.md) records one that did not and was cut rather than shipped.
+
+Checked on the Semgrep registry on 8 September 2026.
 
 ## Contributing
 
