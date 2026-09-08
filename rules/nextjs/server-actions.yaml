@@ -1,0 +1,131 @@
+rules:
+  - id: nextjs-server-action-without-authorization
+    # TypeScript only. Semgrep's JavaScript parser rejects the block body
+    # patterns these exclusions depend on, and a rule that errors out silently
+    # covers nothing. Server Actions written in plain .js are not scanned.
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      Every exported function in a "use server" file is a callable HTTP endpoint.
+      Reaching it does not require rendering the component that calls it, and the
+      arguments are entirely attacker controlled. This one never establishes who
+      is calling. Authenticate, authorize the specific record, then validate the
+      input, in that order. Hidden form fields, disabled buttons and conditional
+      rendering are not access control.
+    metadata:
+      category: security
+      cwe: "CWE-862: Missing Authorization"
+      framework: nextjs
+      confidence: MEDIUM
+      likelihood: HIGH
+      impact: HIGH
+      references:
+        - https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations#authentication-and-authorization
+    patterns:
+      - pattern-inside: |
+          "use server"
+          ...
+      - pattern: |
+          export async function $ACTION(...) { ... }
+      # Any recognised way of establishing the caller clears it. The rule is
+      # about the absence of a check, not about which library performs it.
+      #
+      # The block form matters: "{ ... auth(...) ... }" written on one line does
+      # not parse, and semgrep reports that as a rule error rather than as no
+      # matches, so the whole rule silently covers nothing.
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            auth(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            getServerSession(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            currentUser(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            getUser(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            requireUser(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            authorize(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            verifySession(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            $X.protect(...)
+            ...
+          }
+
+  - id: nextjs-server-action-without-validation
+    languages: [typescript]
+    severity: WARNING
+    message: >-
+      A Server Action takes its arguments straight from the caller with no
+      schema validation. The signature is a suggestion: the client controls
+      types and shapes, not just values. Parse the input before using it.
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+      framework: nextjs
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    patterns:
+      - pattern-inside: |
+          "use server"
+          ...
+      - pattern: |
+          export async function $ACTION(...) { ... }
+      # An action taking no arguments has nothing to validate.
+      - pattern-not: |
+          export async function $ACTION() { ... }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            $SCHEMA.parse(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            $SCHEMA.safeParse(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            $SCHEMA.validate(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $ACTION(...) {
+            ...
+            $SCHEMA.assert(...)
+            ...
+          }

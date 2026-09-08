@@ -1,0 +1,113 @@
+rules:
+  - id: nextjs-public-env-holds-a-secret
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Anything prefixed NEXT_PUBLIC_ is inlined into the browser bundle at build
+      time, permanently, for every visitor. This variable is named like a
+      secret. Drop the prefix and read it in a server component, a route handler
+      or a Server Action instead.
+    metadata:
+      category: security
+      cwe: "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+      framework: nextjs
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+      references:
+        - https://nextjs.org/docs/app/building-your-application/configuring/environment-variables
+    patterns:
+      - pattern-either:
+          - pattern: process.env.$VAR
+          - pattern: process.env[$VAR]
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ^["']?NEXT_PUBLIC_.*(SECRET|PRIVATE|PASSWORD|PASSWD|CREDENTIAL|_KEY|APIKEY|API_KEY|TOKEN|SALT|CERT|DSN)
+      # Several keys carry "KEY" or "TOKEN" and are public by design. Flagging
+      # a Stripe publishable key or a Supabase anon key would be wrong, and
+      # being wrong about the obvious cases is how a ruleset loses trust.
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ^(?!.*(PUBLISHABLE|PUBLIC_KEY|ANON_KEY|CLIENT_ID|MAPS_API_KEY|RECAPTCHA_SITE|SITE_KEY|POSTHOG|GA_|GTM_|SENTRY_DSN)).*$
+
+  - id: nextjs-open-redirect-from-query
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      A redirect target comes straight from the query string with no chance of a
+      check in between. Accept same origin relative paths only. The double slash
+      test matters: "//evil.example.com" is protocol relative and leaves your
+      origin while still starting with a slash.
+    metadata:
+      category: security
+      cwe: "CWE-601: URL Redirection to Untrusted Site"
+      framework: nextjs
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: MEDIUM
+    pattern-either:
+      - pattern: redirect($SP.get(...))
+      - pattern: redirect($SP.get(...) ?? $D)
+      - pattern: redirect($SP.get(...) || $D)
+      - pattern: redirect($REQ.nextUrl.searchParams.get(...))
+      - pattern: permanentRedirect($SP.get(...))
+      - pattern: $RES.redirect($SP.get(...))
+
+  - id: nextjs-ssrf-from-query
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      A URL from the query string is fetched directly by the server. Server
+      components, route handlers and Server Actions run somewhere with reach
+      that the browser does not have, including cloud metadata endpoints and
+      internal services. Allowlist the host, resolve the name and reject private
+      address ranges, and do not follow redirects blindly.
+    metadata:
+      category: security
+      cwe: "CWE-918: Server-Side Request Forgery"
+      framework: nextjs
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    pattern-either:
+      - pattern: fetch($SP.get(...))
+      - pattern: fetch($SP.get(...), ...)
+      - pattern: fetch($REQ.nextUrl.searchParams.get(...))
+      - pattern: fetch($REQ.nextUrl.searchParams.get(...), ...)
+      - pattern: axios.get($SP.get(...))
+      - pattern: axios.get($SP.get(...), ...)
+
+  - id: nextjs-dangerously-set-inner-html
+    languages: [typescript]
+    severity: WARNING
+    message: >-
+      Raw HTML is rendered without sanitizing. Sanitize on the server with a
+      real HTML sanitizer before the value reaches the component. A regex is not
+      a sanitizer.
+    metadata:
+      category: security
+      cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation"
+      framework: nextjs
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    # Two YAML and semgrep constraints collide here. The JSX brace form
+    # contains a colon, so it needs a block scalar or YAML reads it as a
+    # mapping. And a bare attribute does not parse on its own, so the pattern
+    # has to be a whole JSX element with attribute ellipsis on both sides.
+    patterns:
+      - pattern: |
+          <$EL ... dangerouslySetInnerHTML={{ __html: $HTML }} ... />
+      # A literal is authored, not injected.
+      - pattern-not: |
+          <$EL ... dangerouslySetInnerHTML={{ __html: "..." }} ... />
+      # Sanitized values are the correct use of this API, so they must not be
+      # reported or nobody will sanitize.
+      - pattern-not: |
+          <$EL ... dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(...) }} ... />
+      - pattern-not: |
+          <$EL ... dangerouslySetInnerHTML={{ __html: $X.sanitize(...) }} ... />
+      - pattern-not: |
+          <$EL ... dangerouslySetInnerHTML={{ __html: sanitizeHtml(...) }} ... />
+      - pattern-not: |
+          <$EL ... dangerouslySetInnerHTML={{ __html: sanitize(...) }} ... />

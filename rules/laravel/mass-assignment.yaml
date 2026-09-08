@@ -1,0 +1,91 @@
+rules:
+  - id: laravel-guarded-disabled
+    languages: [php]
+    severity: ERROR
+    message: >-
+      An empty $guarded array turns mass assignment protection off completely,
+      so any attribute in the request body reaches the model, including is_admin
+      and foreign keys. Declare $fillable with the attributes a user is allowed
+      to set instead.
+    metadata:
+      category: security
+      cwe: "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+      framework: laravel
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+      references:
+        - https://laravel.com/docs/eloquent#mass-assignment
+    patterns:
+      # Semgrep's PHP parser does not accept the visibility modifier as part of
+      # a property pattern, so the property is matched bare and scoped to a
+      # class body to keep a local variable of the same name out of it.
+      - pattern: $guarded = [];
+      - pattern-inside: |
+          class $C { ... }
+
+  - id: laravel-mass-assign-unfiltered-request
+    languages: [php]
+    severity: ERROR
+    message: >-
+      The whole request body is passed to a mass assignment call. Whatever the
+      model allows, the caller can set. Use $request->validated() so the form
+      request defines the allowed keys in one place, or $request->only([...]).
+    metadata:
+      category: security
+      cwe: "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+      framework: laravel
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+    pattern-either:
+      # Bound to request-shaped variables only. Matching any ->all() would fire
+      # on every collection in the codebase.
+      - patterns:
+          - pattern-either:
+              - pattern: $M->update($REQ->all())
+              - pattern: $M->fill($REQ->all())
+              - pattern: $M->forceFill($REQ->all())
+              - pattern: $M->create($REQ->all())
+              - pattern: $M::create($REQ->all())
+              - pattern: $M::updateOrCreate($X, $REQ->all())
+              - pattern: $M::firstOrCreate($X, $REQ->all())
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^\$(request|req|httpRequest|_request)$
+      - pattern-either:
+          - pattern: $M->update(request()->all())
+          - pattern: $M->fill(request()->all())
+          - pattern: $M->forceFill(request()->all())
+          - pattern: $M->create(request()->all())
+          - pattern: $M::create(request()->all())
+      - pattern-either:
+          - pattern: $M->update($_POST)
+          - pattern: $M->update($_REQUEST)
+          - pattern: $M->update($_GET)
+          - pattern: $M->fill($_POST)
+          - pattern: $M->fill($_REQUEST)
+          - pattern: $M::create($_POST)
+
+  - id: laravel-force-fill
+    languages: [php]
+    severity: WARNING
+    message: >-
+      forceFill bypasses both $fillable and $guarded by design. That is
+      sometimes correct in a seeder or an internal command, and is rarely
+      correct on a path that handles a request. Confirm the array is built from
+      values the caller cannot choose.
+    metadata:
+      category: security
+      cwe: "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+      framework: laravel
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern: $M->forceFill($ARG)
+      # The unfiltered-request rule already covers the request case with a
+      # better message, so this one stays quiet rather than reporting the same
+      # line twice.
+      - pattern-not: $M->forceFill($REQ->all())
+      - pattern-not: $M->forceFill(request()->all())

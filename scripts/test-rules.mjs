@@ -26,7 +26,7 @@ const run = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RULES = join(ROOT, 'rules');
 
-const FIXTURE_EXTENSIONS = ['.php', '.ts', '.tsx', '.js', '.jsx'];
+const FIXTURE_EXTENSIONS = ['.php', '.tsx', '.ts', '.jsx', '.js'];
 
 const colour = process.stdout.isTTY && !process.env.NO_COLOR;
 const paint = (code, s) => (colour ? `\x1b[${code}m${s}\x1b[0m` : s);

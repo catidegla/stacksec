@@ -1,0 +1,102 @@
+rules:
+  - id: laravel-command-injection
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data reaches a shell. escapeshellarg is a fallback and is easy to
+      misuse inside a quoted string. Use Symfony's Process with arguments as
+      separate array entries, which never builds a command line at all:
+      new Process(['convert', $path, 'out.png']).
+    metadata:
+      category: security
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+      framework: laravel
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+      references:
+        - https://symfony.com/doc/current/components/process.html
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ->$FIELD
+          - pattern: $REQ->input(...)
+          - pattern: $REQ->query(...)
+          - pattern: request(...)
+          - pattern: $_GET[...]
+          - pattern: $_POST[...]
+          - pattern: $_REQUEST[...]
+          - pattern: $_COOKIE[...]
+    pattern-sanitizers:
+      # These genuinely transform the value, unlike a guard clause, so taint
+      # can see the result is different from the input.
+      - pattern: escapeshellarg(...)
+      - pattern: escapeshellcmd(...)
+      - pattern: (int) $X
+      - pattern: intval(...)
+      - pattern: basename(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: exec(...)
+          - pattern: shell_exec(...)
+          - pattern: system(...)
+          - pattern: passthru(...)
+          - pattern: popen(...)
+          - pattern: proc_open(...)
+          - pattern: pcntl_exec(...)
+          - pattern: Artisan::call(...)
+
+  - id: laravel-unserialize-request-data
+    languages: [php]
+    severity: ERROR
+    message: >-
+      unserialize on attacker controlled data is remote code execution whenever
+      a gadget chain exists in the dependency tree, and a Laravel application
+      has a large dependency tree. Use json_decode. If the format cannot change,
+      pass ['allowed_classes' => false].
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      framework: laravel
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: unserialize($ARG)
+          - pattern: unserialize($ARG, ...)
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?s).*(\$request|\$_GET|\$_POST|\$_REQUEST|\$_COOKIE|request\(\)).*
+      # Restricting the classes removes the gadget chain, which is the actual
+      # fix when the format cannot change.
+      - pattern-not: unserialize($ARG, ['allowed_classes' => false])
+      - pattern-not: unserialize($ARG, ['allowed_classes' => []])
+
+  - id: laravel-timing-unsafe-token-comparison
+    languages: [php]
+    severity: WARNING
+    message: >-
+      A secret is compared with == or ===, which short circuits on the first
+      differing byte and leaks its position through timing. Use hash_equals for
+      tokens and signatures, and Hash::check for passwords.
+    metadata:
+      category: security
+      cwe: "CWE-208: Observable Timing Discrepancy"
+      framework: laravel
+      confidence: MEDIUM
+      likelihood: LOW
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $A == $B
+          - pattern: $A === $B
+          - pattern: $A != $B
+          - pattern: $A !== $B
+      - metavariable-regex:
+          metavariable: $A
+          regex: ^\$(token|signature|hash|secret|apiKey|api_key|hmac|digest|expectedSignature|providedSignature)$
+      # Comparing against a constant or a literal is not a secret comparison.
+      - metavariable-regex:
+          metavariable: $B
+          regex: ^\$\w+$
