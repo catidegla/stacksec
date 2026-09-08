@@ -44,13 +44,15 @@ class Credentials
 {
     public function hardcoded()
     {
+        // AWS publishes this exact value in its own documentation, so every
+        // scanner allowlists it.
         // ruleid: laravel-hardcoded-credential
-        $stripe = 'sk_live_REDACTED';
+        $aws = 'AKIAIOSFODNN7EXAMPLE';
 
         // ruleid: laravel-hardcoded-credential
         $github = 'ghp_EXAMPLEEXAMPLEEXAMPLEEXAMPLE00000000';
 
-        return [$stripe, $github];
+        return [$aws, $github];
     }
 
     public function indirect()
@@ -62,6 +64,11 @@ class Credentials
         // to ignore the rule.
         // ok: laravel-hardcoded-credential
         $test = 'sk_test_EXAMPLEEXAMPLEEXAMPLE0000';
+
+        // There is deliberately no sk_live_ fixture. GitHub push protection
+        // matches that prefix on shape alone, so any literal long enough to
+        // exercise the rule also blocks the push. The AWS and GitHub cases
+        // above cover the same code path.
 
         // Ordinary strings must never trip this.
         // ok: laravel-hardcoded-credential
