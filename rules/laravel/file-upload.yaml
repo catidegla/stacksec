@@ -1,0 +1,110 @@
+rules:
+  - id: laravel-upload-trusts-client-mime-type
+    languages: [php]
+    severity: ERROR
+    message: >-
+      The mimetypes: validation rule trusts the Content-Type the client sent,
+      which the client chooses. Use mimes: instead, which inspects the actual
+      file contents. The two rule names differ by four characters and give
+      opposite guarantees.
+    metadata:
+      category: security
+      cwe: "CWE-434: Unrestricted Upload of File with Dangerous Type"
+      framework: laravel
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+      references:
+        - https://laravel.com/docs/validation#rule-mimetypes
+    # Matched through the AST rather than as a raw regex. A bare pattern-regex
+    # also fires inside comments, and a rule that flags a comment explaining
+    # the rule is exactly the kind of noise this ruleset exists to avoid.
+    #
+    # The metavariable regex is quoted because the trailing colon would make
+    # YAML read it as a mapping. No word boundary is needed: "mimes" and
+    # "mimetypes" diverge at the fifth character.
+    patterns:
+      - pattern-either:
+          - pattern: $R->validate($RULES)
+          - pattern: $R->validate($RULES, ...)
+          - pattern: Validator::make($D, $RULES)
+          - pattern: Validator::make($D, $RULES, ...)
+          # A FormRequest returns its rules array instead.
+          - pattern: return $RULES;
+      # metavariable-pattern rather than metavariable-regex: the rules value is
+      # usually an array literal, and the plain regex form does not reach
+      # inside a compound node.
+      - metavariable-pattern:
+          metavariable: $RULES
+          language: generic
+          patterns:
+            - pattern-regex: "(?i)mimetypes:"
+
+  - id: laravel-upload-uses-client-filename
+    languages: [php]
+    severity: ERROR
+    message: >-
+      The uploaded file is stored under the name the client supplied.
+      getClientOriginalName carries traversal sequences and double extensions,
+      and nothing has sanitised it here. Use store(), which generates a random
+      name, or build one from values the caller cannot influence.
+    metadata:
+      category: security
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+      framework: laravel
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $F->storeAs($DIR, $NAME, ...)
+          - pattern: $F->storeAs($DIR, $NAME)
+          - pattern: $F->move($DIR, $NAME)
+          - pattern: Storage::putFileAs($DIR, $F, $NAME)
+      - metavariable-pattern:
+          metavariable: $NAME
+          patterns:
+            - pattern-either:
+                - pattern: $X->getClientOriginalName()
+                - pattern: $X->getClientOriginalExtension()
+
+  - id: laravel-upload-without-validation
+    languages: [php]
+    severity: WARNING
+    message: >-
+      An uploaded file is stored with no validation anywhere in this method.
+      Without mimes: and max: rules the endpoint accepts any file of any size,
+      which is a denial of service at best, and a web shell if the disk is
+      served by the web server.
+    metadata:
+      category: security
+      cwe: "CWE-434: Unrestricted Upload of File with Dangerous Type"
+      framework: laravel
+      confidence: LOW
+      likelihood: MEDIUM
+      impact: HIGH
+    # pattern-inside rather than pattern, so the finding lands on the store
+    # call the developer has to change rather than on the function declaration
+    # several lines above it.
+    patterns:
+      - pattern-inside: |
+          public function $ACTION(...) { ... }
+      - pattern: $REQ->file(...)->store(...)
+      - pattern-not-inside: |
+          public function $ACTION(...) {
+            ...
+            $V->validate(...);
+            ...
+          }
+      - pattern-not-inside: |
+          public function $ACTION(...) {
+            ...
+            $V->validated();
+            ...
+          }
+      - pattern-not-inside: |
+          public function $ACTION(...) {
+            ...
+            Validator::make(...);
+            ...
+          }

@@ -1,0 +1,83 @@
+rules:
+  - id: laravel-env-called-outside-config
+    languages: [php]
+    severity: ERROR
+    message: >-
+      env() is called outside the config directory. Once php artisan
+      config:cache has run, and it should have in production, env() returns null
+      everywhere except config files. A null API key fails open surprisingly
+      often: a signature check against null, a comparison against an empty
+      string, a client that silently sends no credential. Read from config()
+      and add the key to a config file.
+    metadata:
+      category: security
+      cwe: "CWE-1188: Initialization of a Resource with an Insecure Default"
+      framework: laravel
+      confidence: HIGH
+      likelihood: HIGH
+      impact: MEDIUM
+      references:
+        - https://laravel.com/docs/configuration#configuration-caching
+    paths:
+      exclude:
+        - config/
+        - "*/config/*"
+        - bootstrap/
+        - tests/
+        - database/seeders/
+    pattern: env(...)
+
+  - id: laravel-hardcoded-credential
+    languages: [php]
+    severity: ERROR
+    message: >-
+      A credential is written into the source. Configuration files are copied
+      between machines, committed by mistake, and readable by every process that
+      can reach the file. Move it to the environment, then rotate it: anything
+      that has been in a repository should be treated as exposed.
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      framework: laravel
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+    patterns:
+      # An array element is not a statement, so "$KEY => $VALUE" on its own is
+      # not a valid PHP pattern and semgrep reports it as a rule error rather
+      # than as no matches. It has to be written as part of an array literal,
+      # which is where config values live anyway.
+      - pattern-either:
+          - pattern: $VAR = $VALUE;
+          - pattern: "[..., $KEY => $VALUE, ...]"
+          - pattern: return $VALUE;
+      # metavariable-regex here, unlike the rules array in file-upload.yaml,
+      # because the value is a scalar. It anchors at the start of the bound
+      # text, and that text includes the surrounding quotes, so the leading
+      # wildcard is required.
+      #
+      # Provider issued credential shapes only. These do not occur by accident,
+      # which is what keeps the rule silent on ordinary strings and paths.
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ".*(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|sk_live_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-ant-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}).*"
+
+  - id: laravel-debug-forced-on
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Debug mode is turned on in code rather than by environment. In production
+      the error page renders environment variables, database credentials and
+      full stack traces to whoever triggered the exception. Let APP_DEBUG decide.
+    metadata:
+      category: security
+      cwe: "CWE-489: Active Debug Code"
+      framework: laravel
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    pattern-either:
+      - pattern: config(['app.debug' => true])
+      - pattern: Config::set('app.debug', true)
+      - pattern: $app['config']->set('app.debug', true)
+      - pattern: ini_set('display_errors', ...)
