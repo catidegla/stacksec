@@ -9,22 +9,50 @@ class AvatarController
 {
     public function trustsClientMime($request)
     {
+        $file = $request->file('avatar');
+
         // ruleid: laravel-upload-trusts-client-mime-type
+        if (in_array($file->getClientMimeType(), ['image/jpeg', 'image/png'])) {
+            $file->store('avatars');
+        }
+    }
+
+    public function comparesClientMimeDirectly($request)
+    {
+        $file = $request->file('avatar');
+
+        // ruleid: laravel-upload-trusts-client-mime-type
+        if ($file->getClientMimeType() === 'image/jpeg') {
+            $file->store('avatars');
+        }
+    }
+
+    public function mimetypesIsContentBased($request)
+    {
+        // Both mimes: and mimetypes: go through getMimeType(), which Symfony
+        // derives from the file contents. Neither reads the client header.
+        // ok: laravel-upload-trusts-client-mime-type
         $request->validate(['avatar' => 'required|file|mimetypes:image/jpeg,image/png|max:2048']);
     }
 
-    public function checksActualContent($request)
+    public function mimesIsAlsoContentBased($request)
     {
-        // mimes: inspects the file, mimetypes: trusts the header. Three
-        // characters apart, opposite guarantees.
         // ok: laravel-upload-trusts-client-mime-type
         $request->validate(['avatar' => 'required|file|mimes:jpg,png,webp|max:2048']);
     }
 
-    public function arrayRulesAreFine($request)
+    public function bothTogetherIsStrongest($request)
     {
         // ok: laravel-upload-trusts-client-mime-type
-        $request->validate(['avatar' => ['required', 'file', 'mimes:jpg,png', 'max:2048']]);
+        $request->validate(['avatar' => ['required', 'file', 'mimes:jpg,png', 'mimetypes:image/jpeg,image/png']]);
+    }
+
+    public function loggingTheClientTypeIsFine($request)
+    {
+        $file = $request->file('avatar');
+
+        // ok: laravel-upload-trusts-client-mime-type
+        logger()->info('client claimed', ['type' => $file->getClientMimeType()]);
     }
 
     public function usesClientName($request)

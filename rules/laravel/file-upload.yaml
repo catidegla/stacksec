@@ -3,10 +3,10 @@ rules:
     languages: [php]
     severity: ERROR
     message: >-
-      The mimetypes: validation rule trusts the Content-Type the client sent,
-      which the client chooses. Use mimes: instead, which inspects the actual
-      file contents. The two rule names differ by four characters and give
-      opposite guarantees.
+      getClientMimeType returns the Content-Type header the client sent, and
+      the client chooses it. Nothing here checks it against the file. Use
+      getMimeType, which Symfony derives from the contents, or validate with
+      mimes: or mimetypes:, both of which already do.
     metadata:
       category: security
       cwe: "CWE-434: Unrestricted Upload of File with Dangerous Type"
@@ -15,30 +15,17 @@ rules:
       likelihood: MEDIUM
       impact: HIGH
       references:
-        - https://laravel.com/docs/validation#rule-mimetypes
-    # Matched through the AST rather than as a raw regex. A bare pattern-regex
-    # also fires inside comments, and a rule that flags a comment explaining
-    # the rule is exactly the kind of noise this ruleset exists to avoid.
-    #
-    # The metavariable regex is quoted because the trailing colon would make
-    # YAML read it as a mapping. No word boundary is needed: "mimes" and
-    # "mimetypes" diverge at the fifth character.
+        - https://symfony.com/doc/current/components/http_foundation.html#uploaded-files
+    # Only a comparison counts. Reading the client type to log it or to echo it
+    # back is harmless, and flagging that would make this rule noise.
     patterns:
       - pattern-either:
-          - pattern: $R->validate($RULES)
-          - pattern: $R->validate($RULES, ...)
-          - pattern: Validator::make($D, $RULES)
-          - pattern: Validator::make($D, $RULES, ...)
-          # A FormRequest returns its rules array instead.
-          - pattern: return $RULES;
-      # metavariable-pattern rather than metavariable-regex: the rules value is
-      # usually an array literal, and the plain regex form does not reach
-      # inside a compound node.
-      - metavariable-pattern:
-          metavariable: $RULES
-          language: generic
-          patterns:
-            - pattern-regex: "(?i)mimetypes:"
+          - pattern: in_array($F->getClientMimeType(), ...)
+          - pattern: in_array($F->guessClientExtension(), ...)
+          - pattern: $F->getClientMimeType() === $X
+          - pattern: $F->getClientMimeType() == $X
+          - pattern: $X === $F->getClientMimeType()
+          - pattern: $X == $F->getClientMimeType()
 
   - id: laravel-upload-uses-client-filename
     languages: [php]

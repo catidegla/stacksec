@@ -16,10 +16,14 @@ Semgrep rules for Laravel and Next.js, where every rule ships with the code it m
 ---
 
 ```php
-$request->validate(['avatar' => 'required|file|mimetypes:image/jpeg|max:2048']);
+if (in_array($file->getClientMimeType(), ['image/jpeg', 'image/png'])) {
+    $file->store('avatars');
+}
 ```
 
-That line validates nothing useful. `mimetypes:` trusts the `Content-Type` header the client chose. `mimes:` inspects the actual file contents. Four characters apart, opposite guarantees, and the difference lives inside a validation string rather than in a function call, which is where a generic rule has nothing to hook onto.
+That checks nothing. `getClientMimeType()` returns the `Content-Type` header the browser sent, and the browser is told what to send by whoever is uploading. Rename a PHP file to `.jpg`, set the header to `image/jpeg`, and it walks straight through.
+
+What makes it worth a rule is that Laravel's own validation does the right thing. Both `mimes:` and `mimetypes:` go through `getMimeType()`, which Symfony derives from the file contents. So the framework hands you two safe options and one unsafe accessor that sits beside them in autocomplete, separated by the word `Client`.
 
 That is what these rules are for.
 

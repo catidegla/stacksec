@@ -35,3 +35,18 @@ PHP parser rejected the `pattern-not-inside` function form needed for it.
 
 Until then this belongs in the review skill, where a human or an agent can weigh
 the surrounding code, rather than in a ruleset that gates a build.
+
+## laravel-upload-trusts-client-mime-type, first version
+
+**Cut because it was wrong, not because it was noisy.**
+
+The original rule flagged the `mimetypes:` validation rule at ERROR severity, on the claim that it trusts the `Content-Type` header the client sent while `mimes:` inspects the file. That is false, and reading Laravel's source settles it in a minute.
+
+`validateMimes` calls `$value->guessExtension()`. `validateMimetypes` calls `$value->getMimeType()`. `UploadedFile` does not override `getMimeType()`, so both resolve to `File::getMimeType()`, which is `MimeTypes::getDefault()->guessMimeType($path)`. Both inspect the contents. Neither reads the client header. The method that does is `getClientMimeType()`, and no validation rule calls it.
+
+So the rule fired on correct code, at high confidence, in a security tool. Worse than noise: it would have talked people out of a safe rule and into believing they had found a vulnerability.
+
+The replacement flags a comparison against `getClientMimeType()` or `guessClientExtension()`, which is the decision the original was reaching for.
+
+Two things worth keeping from this. Reading the framework source beats reading summaries of it, including confident ones. And a rule whose message asserts how a framework works is a claim that needs the same checking as the pattern.
+
