@@ -2,7 +2,7 @@
 
 # stacksec
 
-**Security rules that know your framework.**
+Security rules that know your framework.
 
 Semgrep rules for Laravel and Next.js, where every rule ships with the code it must ignore as well as the code it must catch.
 
@@ -23,9 +23,7 @@ if (in_array($file->getClientMimeType(), ['image/jpeg', 'image/png'])) {
 
 That checks nothing. `getClientMimeType()` returns the `Content-Type` header the browser sent, and the browser is told what to send by whoever is uploading. Rename a PHP file to `.jpg`, set the header to `image/jpeg`, and it walks straight through.
 
-What makes it worth a rule is that Laravel's own validation does the right thing. Both `mimes:` and `mimetypes:` go through `getMimeType()`, which Symfony derives from the file contents. So the framework hands you two safe options and one unsafe accessor that sits beside them in autocomplete, separated by the word `Client`.
-
-That is what these rules are for.
+What makes it worth a rule is that Laravel's own validation does the right thing. Both `mimes:` and `mimetypes:` go through `getMimeType()`, which Symfony derives from the file contents. So the framework hands you two safe options and one unsafe accessor that sits beside them in autocomplete, separated by the word `Client`. Rules that know the framework catch that; generic ones have nothing to hook onto.
 
 ## Quick start
 
@@ -67,7 +65,7 @@ Adds a review skill that runs the rules and then covers what they cannot: per-re
 
 ## The ratio is the point
 
-**42 findings caught. 57 pieces of correct code deliberately not flagged.**
+42 findings caught. 57 pieces of correct code deliberately not flagged.
 
 More cases ignored than caught, and that is the harder half. Anyone can write a rule that catches `exec($_GET['x'])`. The work is not catching `escapeshellarg`, `hash_equals`, `->update($request->validated())`, `whereRaw` with bindings, a validated Server Action, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, or `DOMPurify.sanitize`.
 
@@ -105,7 +103,7 @@ PASS     server-actions     4 caught,  6 correctly ignored
 | `laravel-hardcoded-credential` | Provider issued credential shapes only, so `sk_test_` keys stay quiet. |
 | `laravel-debug-forced-on` | Debug enabled in code rather than by environment. |
 
-**`env()` outside `config/` is the one people underrate.** It is usually filed as a correctness bug: after `php artisan config:cache`, `env()` returns `null` everywhere except config files. The security half is that a null credential tends to fail *open*. A signature verified against `null`. A comparison to an empty string. A client that quietly sends no credential at all.
+`env()` outside `config/` is the one people underrate. It is usually filed as a correctness bug: after `php artisan config:cache`, `env()` returns `null` everywhere except config files. The security half is that a null credential tends to fail *open*. A signature verified against `null`. A comparison to an empty string. A client that quietly sends no credential at all.
 
 ### Next.js
 
@@ -118,24 +116,24 @@ PASS     server-actions     4 caught,  6 correctly ignored
 | `nextjs-ssrf-from-query` | The server has network reach the browser does not, including metadata endpoints. |
 | `nextjs-dangerously-set-inner-html` | Sanitized values are not flagged, or nobody would sanitize. |
 
-The Server Action rules are TypeScript only. Semgrep's JavaScript parser rejects the block body patterns their exclusions depend on, and a rule that errors out covers nothing while appearing installed, so it is scoped rather than left broken.
+The Server Action rules are TypeScript only. Semgrep's JavaScript parser rejects the block body patterns their exclusions depend on, and a rule that errors out covers nothing while appearing installed, so it is scoped instead of left broken.
 
 ## What it does not catch
 
 Being explicit, because a security tool that implies more coverage than it has is its own risk. [REJECTED.md](REJECTED.md) records rules that were written, tested and cut.
 
-- **Per-record authorization.** A controller that loads a model by id and never calls `authorize` is the most common real vulnerability in a Laravel app, and no pattern distinguishes an intentional public endpoint from a forgotten check.
-- **Allowlists that guard rather than transform.** `in_array($request->sort, $sortable, true)` inspects a value without producing a new one, so taint analysis cannot see the check happened. A rule for this fired on correctly written code, so it was cut rather than shipped.
-- **Whole records serialized into client props.** Prisma and Drizzle return every column by default, and everything passed to a client component lands in the HTML payload.
-- **Business logic.** Whether a refund can exceed the charge. Nothing will ever catch that.
+- Per-record authorization. A controller that loads a model by id and never calls `authorize` is the most common real vulnerability in a Laravel app, and no pattern distinguishes an intentional public endpoint from a forgotten check.
+- Allowlists that guard rather than transform. `in_array($request->sort, $sortable, true)` inspects a value without producing a new one, so taint analysis cannot see the check happened. A rule for this fired on correctly written code, so it was cut rather than shipped.
+- Whole records serialized into client props. Prisma and Drizzle return every column by default, and everything passed to a client component lands in the HTML payload.
+- Business logic. Whether a refund can exceed the charge. Nothing will ever catch that.
 
-The Claude Code plugin covers these, because they need judgement rather than a pattern.
+The Claude Code plugin covers these, because they need judgement, not a pattern.
 
 ## Where this sits
 
 Semgrep's own registry is not empty here, and it would be misleading to imply otherwise. It carries Laravel rules, including `php.laravel.security.laravel-raw-sql-injection` and mass assignment checks, and Semgrep Pro advertises further Laravel coverage. Run `p/php` first. It is free, it is maintained by Semgrep, and it overlaps with part of this ruleset.
 
-What these add is the class of bug that lives inside Laravel's string DSLs rather than in a call signature, plus a false positive corpus every rule has to survive. [REJECTED.md](REJECTED.md) records one that did not and was cut rather than shipped.
+What these add is the class of bug that lives inside Laravel's string DSLs rather than in a call signature, plus a false positive corpus every rule has to survive. [REJECTED.md](REJECTED.md) records one that did not and was cut instead of shipped.
 
 Checked on the Semgrep registry on 8 September 2026.
 
