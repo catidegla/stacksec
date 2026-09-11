@@ -1,8 +1,5 @@
-name: stacksec
-description: >-
-  Framework-aware security rules for Laravel and Next.js. Runs semgrep with a
-  ruleset that knows the difference between mimes: and mimetypes:, and emits
-  SARIF for code scanning.
+name: stacksec scan
+description: 'Semgrep rules that know Laravel from Next.js, so a scan tells mimes: from mimetypes:. SARIF for code scanning.'
 author: Christ-loisele Atidegla
 
 branding:
